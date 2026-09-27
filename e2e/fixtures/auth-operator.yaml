@@ -36,16 +36,14 @@ spec:
   roleBindings:
   - namespaceSelector:
     - matchLabels:
-        rakkess-e2e: "true"
-        team: payments
-        tier: gold
+        t-caas.telekom.com/tenant: payments
+        t-caas.telekom.com/owner: tenant
       matchExpressions:
       - key: t-caas.telekom.com/protected
         operator: DoesNotExist
     - matchLabels:
-        rakkess-e2e: "true"
-        team: analytics
-        tier: gold
+        t-caas.telekom.com/tenant: analytics
+        t-caas.telekom.com/owner: tenant
       matchExpressions:
       - key: t-caas.telekom.com/protected
         operator: DoesNotExist
