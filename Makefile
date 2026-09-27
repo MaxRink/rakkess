@@ -151,7 +151,7 @@ $(BUILDDIR):
 	mkdir -p "$@"
 
 %.sha256: %
-	shasum -a 256 $< > $@
+	@if command -v sha256sum >/dev/null 2>&1; then sha256sum "$<"; else shasum -a 256 "$<"; fi > "$@"
 
 .INTERMEDIATE: $(DISTFILE:.gz=)
 $(DISTFILE:.gz=): $(BUILDDIR)
