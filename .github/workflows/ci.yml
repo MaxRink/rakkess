@@ -63,9 +63,9 @@ jobs:
       if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
       run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
-    - name: Cross-compile release binaries
+    - name: Build Docker release packages
       if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
-      run: make build-rakkess build-access-matrix
+      run: docker build --tag rakkess:ci .
 
     - name: Make binaries
       if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
