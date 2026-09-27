@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	roleKind               = "Role"
+	roleBindingKind        = "RoleBinding"
 	group                  = "authorization.t-caas.telekom.com"
 	clusterRoleKind        = "ClusterRole"
 	clusterRoleBindingKind = "ClusterRoleBinding"
@@ -164,8 +166,8 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 		resource, kind string
 		managed        bool
 	}{
-		{"clusterroles", clusterRoleKind, false}, {"roles", "Role", true},
-		{"clusterrolebindings", clusterRoleBindingKind, true}, {"rolebindings", "RoleBinding", true},
+		{"clusterroles", clusterRoleKind, false}, {"roles", roleKind, true},
+		{"clusterrolebindings", clusterRoleBindingKind, true}, {"rolebindings", roleBindingKind, true},
 	} {
 		var result struct {
 			Items []observed `json:"items"`
@@ -183,7 +185,7 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 			bindings = append(slices.Clone(bindings), *def.Spec.ClusterRoleBindings)
 		}
 		for i, b := range bindings {
-			kind := "RoleBinding"
+			kind := roleBindingKind
 			if i >= len(def.Spec.RoleBindings) {
 				kind = clusterRoleBindingKind
 			}
@@ -193,7 +195,7 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 				if obj.Kind != kind || !ownedBy(obj, "BindDefinition", def.Metadata.Name) || (!bindingRefMatches(obj, b) && !subjectMatches(obj.Subjects, report.Username, report.Groups)) {
 					continue
 				}
-				if kind == "RoleBinding" && namespace != "" && obj.Metadata.Namespace != namespace {
+				if kind == roleBindingKind && namespace != "" && obj.Metadata.Namespace != namespace {
 					continue
 				}
 				if subjectMatches(obj.Subjects, report.Username, report.Groups) {
@@ -207,7 +209,7 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 			origin.QueriedNamespaceMatch = matchNamespace(&report, b, kind, namespace, namespaceLabels, &origin.MatchingNamespaces)
 			// A RoleBinding cannot grant a cluster-wide/all-namespaces review. An
 			// observed binding is retained if reconciliation differs from desired state.
-			if kind == "RoleBinding" && namespace == "" {
+			if kind == roleBindingKind && namespace == "" {
 				continue
 			}
 			if origin.QueriedNamespaceMatch != nil && !*origin.QueriedNamespaceMatch && len(origin.Generated) == 0 {
@@ -215,7 +217,7 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 			}
 			report.Origins = append(report.Origins, origin)
 			for _, ref := range b.RoleRefs {
-				used[roleKey{"Role", namespace, ref}] = true
+				used[roleKey{roleKind, namespace, ref}] = true
 			}
 			for _, ref := range b.ClusterRoleRefs {
 				used[roleKey{clusterRoleKind, "", ref}] = true
@@ -223,7 +225,7 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 			for _, obj := range origin.Generated {
 				if obj.RoleRef != nil {
 					ns := ""
-					if obj.RoleRef.Kind == "Role" {
+					if obj.RoleRef.Kind == roleKind {
 						ns = obj.Namespace
 					}
 					used[roleKey{obj.RoleRef.Kind, ns, obj.RoleRef.Name}] = true
@@ -235,7 +237,7 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 	// the old binding. Do not claim complete provenance for unmatched observations.
 	for _, obj := range objects {
 		if obj.RoleRef == nil || !subjectMatches(obj.Subjects, report.Username, report.Groups) ||
-			(obj.Kind == "RoleBinding" && (namespace == "" || obj.Metadata.Namespace != namespace)) {
+			(obj.Kind == roleBindingKind && (namespace == "" || obj.Metadata.Namespace != namespace)) {
 			continue
 		}
 		found := false
@@ -282,7 +284,7 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 		}
 	}
 	for _, obj := range objects {
-		if (obj.Kind == "Role" || obj.Kind == clusterRoleKind) && used[roleKey{obj.Kind, obj.Metadata.Namespace, obj.Metadata.Name}] {
+		if (obj.Kind == roleKind || obj.Kind == clusterRoleKind) && used[roleKey{obj.Kind, obj.Metadata.Namespace, obj.Metadata.Name}] {
 			role := describe(obj)
 			role.AggregateSources = aggregateSources[obj.Metadata.Name]
 			report.Roles = append(report.Roles, role)
@@ -300,7 +302,7 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 			}
 		}
 		for _, obj := range objects {
-			if (obj.Kind == "Role" || obj.Kind == clusterRoleKind) && ownedBy(obj, "RoleDefinition", origin.Name) {
+			if (obj.Kind == roleKind || obj.Kind == clusterRoleKind) && ownedBy(obj, "RoleDefinition", origin.Name) {
 				generated := describe(obj)
 				generated.AggregateSources = aggregateSources[obj.Metadata.Name]
 				origin.Generated = append(origin.Generated, generated)
@@ -361,7 +363,7 @@ func bindingRefMatches(obj observed, b binding) bool {
 	if b.Namespace != "" && obj.Metadata.Namespace != b.Namespace {
 		return false
 	}
-	return (obj.RoleRef.Kind == "Role" && slices.Contains(b.RoleRefs, obj.RoleRef.Name)) || (obj.RoleRef.Kind == clusterRoleKind && slices.Contains(b.ClusterRoleRefs, obj.RoleRef.Name))
+	return (obj.RoleRef.Kind == roleKind && slices.Contains(b.RoleRefs, obj.RoleRef.Name)) || (obj.RoleRef.Kind == clusterRoleKind && slices.Contains(b.ClusterRoleRefs, obj.RoleRef.Name))
 }
 
 func compileSelectors(selectors []metav1.LabelSelector) ([]labels.Selector, error) {

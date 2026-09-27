@@ -182,8 +182,8 @@ rakkess --namespace payments --as alice --as-group readers \
 ```
 
 The table on stdout is always calculated using Kubernetes SelfSubjectAccessReviews.
-A JSON object on stderr contains `authOperator.original` and, for comparisons,
-`authOperator.modified`. Each report resolves the effective identity using a
+A single-line JSON object on stderr contains `authOperator.original` and, for comparisons,
+`authOperator.modified` (ordinary client warnings can also appear on stderr). Each report resolves the effective identity using a
 SelfSubjectReview and includes relevant BindDefinitions, RoleDefinitions, observed
 managed bindings, referenced roles and native ClusterRole aggregation inputs.
 Namespace selectors use OR between selectors and AND within each selector;
