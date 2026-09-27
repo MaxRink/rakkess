@@ -24,7 +24,6 @@ import (
 	"github.com/corneliusweig/rakkess/internal/client/result"
 	"github.com/corneliusweig/rakkess/internal/options"
 	"github.com/corneliusweig/rakkess/internal/validation"
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 )
@@ -39,13 +38,13 @@ func Resource(ctx context.Context, opts *options.RakkessOptions) (result.Resourc
 
 	grs, err := client.FetchAvailableGroupResources(opts)
 	if err != nil {
-		return nil, errors.Wrap(err, "fetch available group resources")
+		return nil, fmt.Errorf("fetch available group resources: %w", err)
 	}
 	klog.V(2).Info(grs)
 
 	authClient, err := opts.GetAuthClient()
 	if err != nil {
-		return nil, errors.Wrap(err, "get auth client")
+		return nil, fmt.Errorf("get auth client: %w", err)
 	}
 
 	ret := client.CheckResourceAccess(ctx, authClient, grs, opts.Verbs, opts.ConfigFlags.Namespace)
@@ -62,16 +61,16 @@ func Subject(ctx context.Context, opts *options.RakkessOptions, resource, resour
 
 	mapper, err := opts.ConfigFlags.ToRESTMapper()
 	if err != nil {
-		return errors.Wrap(err, "cannot create k8s REST mapper")
+		return fmt.Errorf("cannot create k8s REST mapper: %w", err)
 	}
 	versionedResource, err := mapper.ResourceFor(schema.GroupVersionResource{Resource: resource})
 	if err != nil {
-		return errors.Wrap(err, "determine requested resource")
+		return fmt.Errorf("determine requested resource: %w", err)
 	}
 
 	subjectAccess, err := client.GetSubjectAccess(ctx, opts, versionedResource.Resource, resourceName)
 	if err != nil {
-		return errors.Wrap(err, "get subject access")
+		return fmt.Errorf("get subject access: %w", err)
 	}
 
 	if subjectAccess.Empty() {

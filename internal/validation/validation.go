@@ -44,12 +44,12 @@ func OutputFormat(format string) error {
 }
 
 func verbs(verbs []string) error {
-	valid := sets.NewString(constants.ValidVerbs...)
-	given := sets.NewString(verbs...)
+	valid := sets.New[string](constants.ValidVerbs...)
+	given := sets.New[string](verbs...)
 	difference := given.Difference(valid)
 
 	if difference.Len() > 0 {
-		return fmt.Errorf("unexpected verbs: %s", difference.List())
+		return fmt.Errorf("unexpected verbs: %s", sets.List(difference))
 	}
 
 	return nil

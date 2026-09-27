@@ -1,11 +1,10 @@
-FROM golang:alpine
+FROM golang:1.27-alpine
 
-RUN apk add make git
+RUN apk add --no-cache make git upx zip
 
-RUN mkdir -p /go/src/github.com/corneliusweig/rakkess/
+WORKDIR /src
+COPY . .
 
-WORKDIR /go/src/github.com/corneliusweig/rakkess/
+RUN make deploy VERSION=docker
 
-CMD git clone --depth 1 https://github.com/corneliusweig/rakkess.git . && \
-    make all && \
-    mv out/* /go/bin
+CMD ["sh", "-c", "cp -r out/* /go/bin/"]

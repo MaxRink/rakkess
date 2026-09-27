@@ -17,6 +17,7 @@ limitations under the License.
 package options
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/corneliusweig/rakkess/internal/constants"
@@ -87,6 +88,9 @@ func TestRakkessOptions_ExpandServiceAccount(t *testing.T) {
 			serviceAccount: "some-ns:some-sa",
 			expected:       "system:serviceaccount:some-ns:some-sa",
 		},
+		{name: "invalid :reader", serviceAccount: ":reader", expectedErr: "must be qualified"},
+		{name: "invalid team:", serviceAccount: "team:", expectedErr: "must be qualified"},
+		{name: "invalid team:reader:extra", serviceAccount: "team:reader:extra", expectedErr: "must be qualified"},
 		{
 			name:           "unqualified serviceAccount without namespace",
 			serviceAccount: "some-ns",
@@ -113,4 +117,14 @@ func TestRakkessOptions_ExpandServiceAccount(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetAuthClientInvalidTLSConfig(t *testing.T) {
+	opts := NewRakkessOptions()
+	server, caFile := "https://example.invalid", filepath.Join(t.TempDir(), "missing-ca")
+	opts.ConfigFlags.APIServer = &server
+	opts.ConfigFlags.CAFile = &caFile
+	client, err := opts.GetAuthClient()
+	assert.Nil(t, client)
+	assert.ErrorContains(t, err, "missing-ca")
 }

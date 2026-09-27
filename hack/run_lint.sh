@@ -17,30 +17,21 @@
 set -euo pipefail
 
 HACK=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-GOPATH="$(go env GOPATH)"
+LINT_BIN="${HACK}/../.bin/golangci-lint"
 
-if ! [[ -x "$GOPATH/bin/golangci-lint" ]]
-then
+if ! [[ -x "$LINT_BIN" ]] || ! "$LINT_BIN" version --short 2>/dev/null | grep -q '^2\.14\.0'; then
    echo 'Installing golangci-lint'
-   "${HACK}"/install_golangci-lint.sh -b "$GOPATH/bin" v1.41.1
+   "${HACK}"/install_golangci-lint.sh -b "${HACK}/../.bin" v2.14.0
 fi
 
-"$GOPATH/bin/golangci-lint" run \
-		--timeout 2m \
-		--no-config \
-		-D errcheck \
-		-E goconst \
-		-E gocritic \
-		-E goimports \
-		-E golint \
-		-E gosec \
-		-E gosimple \
-		-E interfacer \
-		-E maligned \
-		-E misspell \
-		-E unconvert \
-		-E unparam \
-		-E stylecheck \
-		-E staticcheck \
-		-E structcheck \
-		--skip-dirs hack
+format_diff=$("$LINT_BIN" fmt --no-config --enable goimports --diff)
+if [[ -n "$format_diff" ]]; then
+   printf '%s\n' "$format_diff"
+   exit 1
+fi
+
+"$LINT_BIN" run \
+		--timeout 10m \
+		--config "${HACK}/../.golangci.yml" \
+		--disable errcheck \
+		--enable goconst,gocritic,gosec,misspell,unconvert,unparam,staticcheck

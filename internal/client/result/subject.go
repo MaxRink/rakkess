@@ -17,6 +17,7 @@ limitations under the License.
 package result
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -44,9 +45,9 @@ type SubjectAccess struct {
 	// ResourceName is the name of the kubernetes resource instance of this query.
 	ResourceName string
 	// roleToVerbs holds all rule data concerning this resource and is extracted from Roles and ClusterRoles.
-	roleToVerbs map[RoleRef]sets.String
+	roleToVerbs map[RoleRef]sets.Set[string]
 	// subjectToVerbs holds all subject access data for this resource and is extracted from RoleBindings and ClusterRoleBindings.
-	subjectToVerbs map[SubjectRef]sets.String
+	subjectToVerbs map[SubjectRef]sets.Set[string]
 }
 
 // NewSubjectAccess creates a new SubjectAccess with initialized fields.
@@ -54,13 +55,13 @@ func NewSubjectAccess(resource, resourceName string) *SubjectAccess {
 	return &SubjectAccess{
 		Resource:       resource,
 		ResourceName:   resourceName,
-		roleToVerbs:    make(map[RoleRef]sets.String),
-		subjectToVerbs: make(map[SubjectRef]sets.String),
+		roleToVerbs:    make(map[RoleRef]sets.Set[string]),
+		subjectToVerbs: make(map[SubjectRef]sets.Set[string]),
 	}
 }
 
 // Get provides access to the actual result (for testing).
-func (sa *SubjectAccess) Get() map[SubjectRef]sets.String {
+func (sa *SubjectAccess) Get() map[SubjectRef]sets.Set[string] {
 	return sa.subjectToVerbs
 }
 
@@ -103,24 +104,16 @@ func (sa *SubjectAccess) MatchRules(ref RoleRef, rule v1.PolicyRule) {
 		if r == v1.ResourceAll || r == sa.Resource {
 			expandedVerbs := expand(rule.Verbs)
 			if verbs, ok := sa.roleToVerbs[ref]; ok {
-				sa.roleToVerbs[ref] = sets.NewString(expandedVerbs...).Union(verbs)
+				sa.roleToVerbs[ref] = sets.New[string](expandedVerbs...).Union(verbs)
 			} else {
-				sa.roleToVerbs[ref] = sets.NewString(expandedVerbs...)
+				sa.roleToVerbs[ref] = sets.New[string](expandedVerbs...)
 			}
 		}
 	}
 }
 
 func includes(coll []string, x string) bool {
-	if x == "" {
-		return false
-	}
-	for _, s := range coll {
-		if s == x {
-			return true
-		}
-	}
-	return false
+	return x != "" && slices.Contains(coll, x)
 }
 
 func expand(verbs []string) []string {
