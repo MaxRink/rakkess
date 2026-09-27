@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/corneliusweig/rakkess/internal/options"
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -48,9 +47,10 @@ func (g GroupResource) fullName() string {
 
 // FetchAvailableGroupResources fetches a list of known APIResources on the server.
 func FetchAvailableGroupResources(opts *options.RakkessOptions) ([]GroupResource, error) {
+	opts.DiscoveryError = nil
 	client, err := getDiscoveryClient(opts)
 	if err != nil {
-		return nil, errors.Wrap(err, "discovery client")
+		return nil, fmt.Errorf("discovery client: %w", err)
 	}
 
 	client.Invalidate()
@@ -63,9 +63,10 @@ func FetchAvailableGroupResources(opts *options.RakkessOptions) ([]GroupResource
 	}
 
 	resources, err := resourcesFetcher()
+	opts.DiscoveryError = err
 	if err != nil {
 		if resources == nil {
-			return nil, errors.Wrap(err, "get preferred resources")
+			return nil, fmt.Errorf("get preferred resources: %w", err)
 		}
 		klog.Warningf("Could not fetch full list of resources, result will be incomplete: %s", err)
 	}

@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 /*
@@ -26,24 +27,26 @@ package printer
 import (
 	"io"
 	"os"
-	"syscall"
 
-	sequences "github.com/konsorten/go-windows-terminal-sequences"
+	"golang.org/x/sys/windows"
+	"golang.org/x/term"
 )
 
 // initTerminal enables ANSI color escape on windows. Usually, this is done by klog, but
 // since we don't log anything before printing, we need to take care of this ourselves.
 func initTerminal(w io.Writer) {
 	if f, ok := w.(*os.File); ok {
-		sequences.EnableVirtualTerminalProcessing(syscall.Handle(f.Fd()), true)
+		handle := windows.Handle(f.Fd())
+		var mode uint32
+		if windows.GetConsoleMode(handle, &mode) == nil {
+			_ = windows.SetConsoleMode(handle, mode|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+		}
 	}
 }
 
 func isTerminalImpl(w io.Writer) bool {
 	if f, ok := w.(*os.File); ok {
-		var mode uint32
-		err := syscall.GetConsoleMode(syscall.Handle(f.Fd()), &mode)
-		return err == nil
+		return term.IsTerminal(int(f.Fd()))
 	}
 	return false
 }

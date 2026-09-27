@@ -19,9 +19,6 @@ package version
 import (
 	"fmt"
 	"runtime"
-	"strings"
-
-	"github.com/blang/semver"
 )
 
 var version, gitCommit, buildDate string
@@ -48,10 +45,4 @@ func GetBuildInfo() *BuildInfo {
 		Compiler:  runtime.Compiler,
 		Platform:  platform,
 	}
-}
-
-// ParseVersion parses a version string ignoring a leading `v`. For example: v1.2.3
-func ParseVersion(version string) (semver.Version, error) {
-	version = strings.TrimLeft(strings.TrimSpace(version), "v")
-	return semver.Parse(version)
 }

@@ -34,9 +34,14 @@ func Diff(left, right result.ResourceAccess, verbs []string) *printer.Table {
 		headers = append(headers, strings.ToUpper(v))
 	}
 
-	names := make([]string, 0, len(left))
+	names := make([]string, 0, len(left)+len(right))
 	for name := range left {
 		names = append(names, name)
+	}
+	for name := range right {
+		if _, ok := left[name]; !ok {
+			names = append(names, name)
+		}
 	}
 	sort.Strings(names)
 
@@ -49,9 +54,10 @@ func Diff(left, right result.ResourceAccess, verbs []string) *printer.Table {
 		skip := true
 		var outcomes []printer.Outcome
 		for _, verb := range verbs {
-			ll, rr := l[verb], r[verb]
+			ll, leftPresent := l[verb]
+			rr, rightPresent := r[verb]
 			var o printer.Outcome
-			if ll == result.RequestErr || rr == result.RequestErr {
+			if !leftPresent || !rightPresent || ll == result.RequestErr || rr == result.RequestErr {
 				skip = false
 				o = printer.Err
 			} else if ll != rr {
@@ -67,13 +73,6 @@ func Diff(left, right result.ResourceAccess, verbs []string) *printer.Table {
 		}
 		if !skip {
 			p.AddRow([]string{name}, outcomes...)
-		}
-	}
-
-	for name := range right {
-		if _, ok := left[name]; !ok {
-			klog.Warning("Some differences may be hidden, please swap the roles to get the full picture.")
-			break
 		}
 	}
 

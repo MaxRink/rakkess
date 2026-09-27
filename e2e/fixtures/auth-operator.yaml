@@ -1,0 +1,67 @@
+apiVersion: authorization.t-caas.telekom.com/v1alpha1
+kind: RoleDefinition
+metadata:
+  name: generated-reader
+spec:
+  targetRole: Role
+  targetName: generated-reader
+  targetNamespace: rakkess-e2e
+  scopeNamespaced: true
+  restrictedVerbs: ["create", "delete", "deletecollection", "patch", "update"]
+---
+apiVersion: authorization.t-caas.telekom.com/v1alpha1
+kind: BindDefinition
+metadata:
+  name: generated-reader
+spec:
+  targetName: generated-reader
+  subjects:
+  - kind: ServiceAccount
+    name: operator-reader
+    namespace: rakkess-e2e
+  roleBindings:
+  - namespace: rakkess-e2e
+    roleRefs: ["generated-reader"]
+---
+apiVersion: authorization.t-caas.telekom.com/v1alpha1
+kind: BindDefinition
+metadata:
+  name: selector-reader
+spec:
+  targetName: selector-reader
+  subjects:
+  - kind: ServiceAccount
+    name: operator-reader
+    namespace: rakkess-e2e
+  roleBindings:
+  - namespaceSelector:
+    - matchLabels:
+        rakkess-e2e: "true"
+        team: payments
+        tier: gold
+      matchExpressions:
+      - key: t-caas.telekom.com/protected
+        operator: DoesNotExist
+    - matchLabels:
+        rakkess-e2e: "true"
+        team: analytics
+        tier: gold
+      matchExpressions:
+      - key: t-caas.telekom.com/protected
+        operator: DoesNotExist
+    clusterRoleRefs: ["generated-aggregate"]
+
+---
+apiVersion: authorization.t-caas.telekom.com/v1alpha1
+kind: RoleDefinition
+metadata:
+  name: generated-aggregate
+spec:
+  targetRole: ClusterRole
+  targetName: generated-aggregate
+  scopeNamespaced: true
+  aggregateFrom:
+    clusterRoleSelectors:
+    - matchLabels:
+        t-caas.telekom.com/rbac-fragment: "true"
+        t-caas.telekom.com/aggregate-scope: rakkess-e2e

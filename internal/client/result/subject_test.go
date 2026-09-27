@@ -111,12 +111,12 @@ func TestSubjectAccess_MatchRules(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sa := NewSubjectAccess(resource, test.resourceName)
 			if test.initialVerbs != nil {
-				sa.roleToVerbs[r] = sets.NewString(test.initialVerbs...)
+				sa.roleToVerbs[r] = sets.New[string](test.initialVerbs...)
 			}
 			sa.MatchRules(r, test.rule)
 
 			if test.expectedVerbs != nil {
-				assert.Equal(t, sets.NewString(test.expectedVerbs...), sa.roleToVerbs[r])
+				assert.Equal(t, sets.New[string](test.expectedVerbs...), sa.roleToVerbs[r])
 			} else {
 				_, ok := sa.roleToVerbs[r]
 				assert.False(t, ok)
@@ -166,11 +166,11 @@ func TestSubjectAccess_ResolveRoleRef(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			sa := SubjectAccess{
-				subjectToVerbs: map[SubjectRef]sets.String{mainSubject: sets.NewString("initial-verb")},
-				roleToVerbs:    make(map[RoleRef]sets.String),
+				subjectToVerbs: map[SubjectRef]sets.Set[string]{mainSubject: sets.New[string]("initial-verb")},
+				roleToVerbs:    make(map[RoleRef]sets.Set[string]),
 			}
 			if test.verbsForRole != nil {
-				sa.roleToVerbs[r] = sets.NewString(test.verbsForRole...)
+				sa.roleToVerbs[r] = sets.New[string](test.verbsForRole...)
 			}
 
 			subjects := make([]v1.Subject, 0, len(test.subjects))
@@ -183,7 +183,7 @@ func TestSubjectAccess_ResolveRoleRef(t *testing.T) {
 			}
 			sa.ResolveRoleRef(r, subjects)
 
-			assert.Equal(t, sets.NewString(test.expectedVerbs...), sa.subjectToVerbs[mainSubject])
+			assert.Equal(t, sets.New[string](test.expectedVerbs...), sa.subjectToVerbs[mainSubject])
 		})
 	}
 }

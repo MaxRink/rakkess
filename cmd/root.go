@@ -17,22 +17,28 @@ limitations under the License.
 package cmd
 
 import (
-	"context"
 	"flag"
 	"fmt"
+	"os/signal"
+	"slices"
 	"strings"
+	"syscall"
 
 	rakkess "github.com/corneliusweig/rakkess/internal"
+	"github.com/corneliusweig/rakkess/internal/authoperator"
 	"github.com/corneliusweig/rakkess/internal/constants"
 	"github.com/corneliusweig/rakkess/internal/diff"
 	"github.com/corneliusweig/rakkess/internal/options"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 )
 
 var (
-	opts     = options.NewRakkessOptions()
-	diffWith []string
+	opts            = options.NewRakkessOptions()
+	diffWith        []string
+	authOperator    bool
+	baseImpersonate string
 )
 
 const (
@@ -85,28 +91,36 @@ var rootCmd = &cobra.Command{
 	Example: constants.HelpTextMapName(rakkessExamples),
 	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, cancel := context.WithCancel(context.Background())
-		catchCtrlC(cancel)
+		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGPIPE, syscall.SIGTERM)
+		defer stop()
 
 		res, err := rakkess.Resource(ctx, opts)
 		if err != nil {
 			return err
 		}
+		var provenance map[string]authoperator.Report
+		if authOperator {
+			provenance = map[string]authoperator.Report{"original": collectAuthOperator(ctx)}
+		}
 		if diffWith == nil {
 			t := res.Table(opts.Verbs)
 			t.Render(opts.Streams.Out, opts.OutputFormat)
-			return nil
+			return writeAuthOperator(provenance)
 		}
 
 		orig := res
+		originalVerbs := slices.Clone(opts.Verbs)
+		if opts.ConfigFlags.Impersonate != nil {
+			*opts.ConfigFlags.Impersonate = baseImpersonate
+		}
 		flags := cmd.Flags()
+		resetSlices := map[string]bool{}
 
 		for _, arg := range diffWith {
-			parts := strings.SplitN(arg, "=", 2)
-			if len(parts) != 2 {
+			name, value, ok := strings.Cut(arg, "=")
+			if !ok {
 				return fmt.Errorf("diffWith expects format flag=value, got %s", arg)
 			}
-			name, value := parts[0], parts[1]
 			fl := flags.Lookup(name)
 			if fl == nil && len(name) == 1 {
 				fl = flags.ShorthandLookup(name)
@@ -115,19 +129,39 @@ var rootCmd = &cobra.Command{
 				return fmt.Errorf("flag %q does not exist", name)
 			}
 			klog.V(2).Infof("Override flag %s=%s", name, value)
+			// Overrides replace repeated values such as --as-group rather than
+			// retaining the original identity's groups in the comparison.
+			if slice, ok := fl.Value.(pflag.SliceValue); ok && !resetSlices[fl.Name] {
+				if err := slice.Replace(nil); err != nil {
+					return fmt.Errorf("reset %s: %w", name, err)
+				}
+				resetSlices[fl.Name] = true
+			}
 			if err := fl.Value.Set(value); err != nil {
 				return fmt.Errorf("failed to set %s=%s", name, value)
 			}
 		}
-		_ = opts.ExpandServiceAccount() // expand again in case `--sa` was overridden
+		if err := opts.ExpandServiceAccount(); err != nil { // expand again in case `--sa` was overridden
+			return err
+		}
+		opts.ExpandVerbs()
 		mod, err := rakkess.Resource(ctx, opts)
 		if err != nil {
-			return fmt.Errorf("with modified flags: %v", err)
+			return fmt.Errorf("with modified flags: %w", err)
 		}
 
-		t := diff.Diff(orig, mod, opts.Verbs)
+		verbs := originalVerbs
+		for _, verb := range opts.Verbs {
+			if !slices.Contains(verbs, verb) {
+				verbs = append(verbs, verb)
+			}
+		}
+		t := diff.Diff(orig, mod, verbs)
 		t.Render(opts.Streams.Out, opts.OutputFormat)
-		return nil
+		if provenance != nil {
+			provenance["modified"] = collectAuthOperator(ctx)
+		}
+		return writeAuthOperator(provenance)
 	},
 	PostRun: func(cmd *cobra.Command, args []string) {
 		if n := opts.ConfigFlags.Namespace; n == nil || *n == "" {
@@ -139,7 +173,8 @@ var rootCmd = &cobra.Command{
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
-	rootCmd.SetOutput(opts.Streams.Out)
+	rootCmd.SetOut(opts.Streams.Out)
+	rootCmd.SetErr(opts.Streams.ErrOut)
 	return rootCmd.Execute()
 }
 
@@ -148,12 +183,17 @@ func init() {
 	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 
 	AddRakkessFlags(rootCmd)
+	rootCmd.Flags().BoolVar(&authOperator, "auth-operator", false, "include advisory auth-operator definitions and observed RBAC provenance as JSON on stderr")
 	rootCmd.Flags().StringVar(&opts.AsServiceAccount, constants.FlagServiceAccount, "", "similar to --as, but impersonate as service-account. The argument must be qualified <namespace>:<sa-name> or be combined with the --namespace option. Takes precedence over --as.")
 
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		opts.ExpandVerbs()
 	}
 	rootCmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		baseImpersonate = ""
+		if opts.ConfigFlags.Impersonate != nil {
+			baseImpersonate = *opts.ConfigFlags.Impersonate
+		}
 		return opts.ExpandServiceAccount()
 	}
 }

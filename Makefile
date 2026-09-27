@@ -66,10 +66,26 @@ GO_FILES  := $(shell find . -type f -name '*.go')
 test:
 	go test -tags accessmatrix ./...
 
+.PHONY: race
+race: CGO_ENABLED := 1
+race:
+	go test -race -tags accessmatrix ./...
+
+.PHONY: vet
+vet:
+	go vet -tags accessmatrix ./...
+
+.PHONY: e2e
+e2e: $(BUILDDIR)/rakkess-e2e
+	hack/e2e-kind.sh
+
+$(BUILDDIR)/rakkess-e2e: $(GO_FILES) | $(BUILDDIR)
+	go build -trimpath -o "$@" .
+
 .PHONY: help
 help:
 	@echo 'Valid make targets:'
-	@echo '  - all:      build binaries for all supported platforms'
+	@echo '  - all:      lint, test, race, vet and build the host binary'
 	@echo '  - clean:    clean up build directory'
 	@echo '  - coverage: run unit tests with coverage'
 	@echo '  - deploy:   build artifacts for a new deployment'
@@ -78,6 +94,9 @@ help:
 	@echo '  - help:     print this help'
 	@echo '  - lint:     run golangci-lint'
 	@echo '  - test:     run unit tests'
+	@echo '  - race:     run unit tests with the race detector'
+	@echo '  - vet:      run go vet'
+	@echo '  - e2e:      run the isolated Kind end-to-end suite'
 	@echo '  - build-rakkess:        build binaries for all supported platforms'
 	@echo '  - build-access-matrix:  build binaries for all supported platforms'
 
@@ -86,7 +105,7 @@ coverage: $(BUILDDIR)
 	go test -coverprofile=$(BUILDDIR)/coverage.txt -covermode=atomic ./...
 
 .PHONY: all
-all: lint test dev
+all: lint test race vet dev
 
 .PHONY: dev
 dev: CGO_ENABLED := 1
@@ -94,12 +113,21 @@ dev: GO_LDFLAGS := $(subst -s -w,,$(GO_LDFLAGS))
 dev:
 	go build -race -ldflags $(GO_LDFLAGS) -o rakkess main.go
 
-# TODO(corneliusweig): gox does not support the -trimpath flag, see https://github.com/mitchellh/gox/pull/138
 build-rakkess: $(GO_FILES) $(BUILDDIR)
-	GOFLAGS="-trimpath" gox -osarch="$(PLATFORMS)" -tags netgo -ldflags $(GO_LDFLAGS) -output="out/rakkess-{{.Arch}}-{{.OS}}"
+	@set -e; for platform in $(PLATFORMS); do \
+		GOOS=$${platform%/*}; GOARCH=$${platform#*/}; \
+		output="$(BUILDDIR)/rakkess-$${GOARCH}-$${GOOS}"; \
+		[ "$$GOOS" = windows ] && output="$$output.exe"; \
+		GOOS=$$GOOS GOARCH=$$GOARCH GOFLAGS=-trimpath go build -tags netgo -ldflags $(GO_LDFLAGS) -o "$$output" .; \
+	done
 
 build-access-matrix: $(GO_FILES) $(BUILDDIR)
-	GOFLAGS="-trimpath" gox -osarch="$(PLATFORMS)" -tags accessmatrix,netgo -ldflags $(GO_LDFLAGS) -output="out/access-matrix-{{.Arch}}-{{.OS}}"
+	@set -e; for platform in $(PLATFORMS); do \
+		GOOS=$${platform%/*}; GOARCH=$${platform#*/}; \
+		output="$(BUILDDIR)/access-matrix-$${GOARCH}-$${GOOS}"; \
+		[ "$$GOOS" = windows ] && output="$$output.exe"; \
+		GOOS=$$GOOS GOARCH=$$GOARCH GOFLAGS=-trimpath go build -tags accessmatrix,netgo -ldflags $(GO_LDFLAGS) -o "$$output" .; \
+	done
 
 .PHONY: lint
 lint:
