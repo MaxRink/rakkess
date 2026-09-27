@@ -4,8 +4,8 @@ metadata:
   name: rakkess-e2e
   labels:
     rakkess-e2e: "true"
-    team: payments
-    tier: gold
+    t-caas.telekom.com/tenant: payments
+    t-caas.telekom.com/owner: tenant
 ---
 apiVersion: v1
 kind: Namespace
@@ -13,8 +13,8 @@ metadata:
   name: rakkess-e2e-open
   labels:
     rakkess-e2e: "true"
-    team: analytics
-    tier: gold
+    t-caas.telekom.com/tenant: analytics
+    t-caas.telekom.com/owner: tenant
 ---
 apiVersion: v1
 kind: Namespace
@@ -22,8 +22,8 @@ metadata:
   name: rakkess-e2e-protected
   labels:
     rakkess-e2e: "true"
-    team: payments
-    tier: gold
+    t-caas.telekom.com/tenant: payments
+    t-caas.telekom.com/owner: tenant
     t-caas.telekom.com/protected: "true"
 ---
 apiVersion: v1
@@ -154,8 +154,8 @@ metadata:
   name: rakkess-e2e-denied
   labels:
     rakkess-e2e: "true"
-    team: payments
-    tier: silver
+    t-caas.telekom.com/tenant: payments
+    t-caas.telekom.com/owner: platform
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
