@@ -17,6 +17,7 @@ limitations under the License.
 package client
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/corneliusweig/rakkess/internal/options"
@@ -78,6 +79,7 @@ func FetchAvailableGroupResources(opts *options.RakkessOptions) ([]GroupResource
 		}
 		gv, err := schema.ParseGroupVersion(list.GroupVersion)
 		if err != nil {
+			opts.DiscoveryError = errors.Join(opts.DiscoveryError, fmt.Errorf("parse groupVersion %q: %w", list.GroupVersion, err))
 			klog.Warningf("Cannot parse groupVersion: %s", err)
 			continue
 		}

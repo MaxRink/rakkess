@@ -91,7 +91,14 @@ func TestFetchAvailableGroupResources(t *testing.T) {
 		resources metav1.APIResourceList
 		err       error
 		expected  interface{}
+		malformed bool
 	}{
+		{
+			name:      "malformed group version",
+			malformed: true,
+			resources: metav1.APIResourceList{GroupVersion: "a/b/v1", APIResources: []metav1.APIResource{aFoo}},
+			expected:  []GroupResource(nil),
+		},
 		{
 			name:  "cluster resources",
 			verbs: []string{"list"},
@@ -164,7 +171,11 @@ func TestFetchAvailableGroupResources(t *testing.T) {
 			grs, err := FetchAvailableGroupResources(opts)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expected, grs)
-			assert.ErrorIs(t, opts.DiscoveryError, test.err)
+			if test.malformed {
+				assert.Error(t, opts.DiscoveryError)
+			} else {
+				assert.ErrorIs(t, opts.DiscoveryError, test.err)
+			}
 			assert.Equal(t, 1, fakeRbacClient.invalidateCalls)
 		})
 	}

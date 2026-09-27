@@ -159,7 +159,7 @@ func TestCLI(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			args := []string{"-test.run=^TestCLIProcess$", "--", "--kubeconfig", kubeconfig, "--cache-dir", dir, "--verbs", "list,create", "-o", "ascii-table"}
-			process := exec.CommandContext(ctx, os.Args[0], append(args, tt.args...)...) // #nosec G204 -- executes this test binary with table-defined arguments.
+			process := exec.CommandContext(ctx, os.Args[0], append(args, tt.args...)...) // #nosec G204 G702 -- executes this test binary with table-defined arguments.
 			process.Env = append(os.Environ(), "RAKKESS_TEST_CLI=1")
 			var stdout, stderr bytes.Buffer
 			process.Stdout = &stdout
