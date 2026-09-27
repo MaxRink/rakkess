@@ -153,8 +153,8 @@ func TestCheckResourceAccess(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fakeReviews := &fake.FakeSelfSubjectAccessReviews{Fake: &fake.FakeAuthorizationV1{Fake: &authTesting.Fake{}}}
-			fakeReviews.Fake.AddReactor("create", "selfsubjectaccessreviews",
+			fakeClient := &fake.FakeAuthorizationV1{Fake: &authTesting.Fake{}}
+			fakeClient.AddReactor("create", "selfsubjectaccessreviews",
 				func(action authTesting.Action) (handled bool, ret runtime.Object, err error) {
 					sar := action.(authTesting.CreateAction).GetObject().(*v1.SelfSubjectAccessReview)
 
@@ -167,7 +167,7 @@ func TestCheckResourceAccess(t *testing.T) {
 					return false, nil, nil
 				})
 
-			results := CheckResourceAccess(ctx, fakeReviews, test.input, test.verbs, nil)
+			results := CheckResourceAccess(ctx, fakeClient.SelfSubjectAccessReviews(), test.input, test.verbs, nil)
 
 			var got []string
 			for name, access := range results {

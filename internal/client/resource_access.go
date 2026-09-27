@@ -18,12 +18,12 @@ package client
 
 import (
 	"context"
+	"slices"
 	"sync"
 
 	"github.com/corneliusweig/rakkess/internal/client/result"
 	v1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	authv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/klog/v2"
 )
@@ -43,9 +43,7 @@ func CheckResourceAccess(ctx context.Context, sar authv1.SelfSubjectAccessReview
 	var wg sync.WaitGroup
 	for _, gr := range grs {
 		wg.Add(1)
-		// copy captured variables
 		namespace := ns
-		gr := gr
 		go func() {
 			defer wg.Done()
 
@@ -57,11 +55,9 @@ func CheckResourceAccess(ctx context.Context, sar authv1.SelfSubjectAccessReview
 				namespace = ""
 			}
 
-			allowedVerbs := sets.NewString(gr.APIResource.Verbs...)
-
 			access := make(map[string]result.Access)
 			for _, v := range verbs {
-				if !allowedVerbs.Has(v) {
+				if !slices.Contains(gr.APIResource.Verbs, v) {
 					access[v] = result.NotApplicable
 					continue
 				}
@@ -80,7 +76,7 @@ func CheckResourceAccess(ctx context.Context, sar authv1.SelfSubjectAccessReview
 				var a result.Access
 				resp, err := sar.Create(ctx, &req, metav1.CreateOptions{})
 				switch {
-				case err != nil:
+				case err != nil || resp == nil || resp.Status.EvaluationError != "":
 					a = result.RequestErr
 				case resp.Status.Allowed:
 					a = result.Allowed

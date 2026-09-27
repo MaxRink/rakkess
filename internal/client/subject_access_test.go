@@ -50,7 +50,7 @@ func TestGetSubjectAccess(t *testing.T) {
 		clusterRoleBindings []v1.ClusterRoleBinding
 		roles               []v1.Role
 		roleBindings        []v1.RoleBinding
-		expected            map[result.SubjectRef]sets.String
+		expected            map[result.SubjectRef]sets.Set[string]
 	}{
 		{
 			name:                "cluster-role and role matches",
@@ -60,8 +60,8 @@ func TestGetSubjectAccess(t *testing.T) {
 			clusterRoleBindings: clusterRoleBindings("test-user"),
 			roles:               roles("deployments", "list"),
 			roleBindings:        roleBindings(testRoleName, roleName, "test-user"),
-			expected: map[result.SubjectRef]sets.String{
-				{Name: "test-user", Kind: subjectKind}: sets.NewString("create", "list"),
+			expected: map[result.SubjectRef]sets.Set[string]{
+				{Name: "test-user", Kind: subjectKind}: sets.New[string]("create", "list"),
 			},
 		},
 		{
@@ -72,10 +72,10 @@ func TestGetSubjectAccess(t *testing.T) {
 			clusterRoleBindings: clusterRoleBindings("user1", "user2"),
 			roles:               roles("deployments", "list"),
 			roleBindings:        roleBindings(testRoleName, roleName, "user2", "user3"),
-			expected: map[result.SubjectRef]sets.String{
-				{Name: "user1", Kind: subjectKind}: sets.NewString("create"),
-				{Name: "user2", Kind: subjectKind}: sets.NewString("create", "list"),
-				{Name: "user3", Kind: subjectKind}: sets.NewString("list"),
+			expected: map[result.SubjectRef]sets.Set[string]{
+				{Name: "user1", Kind: subjectKind}: sets.New[string]("create"),
+				{Name: "user2", Kind: subjectKind}: sets.New[string]("create", "list"),
+				{Name: "user3", Kind: subjectKind}: sets.New[string]("list"),
 			},
 		},
 		{
@@ -86,8 +86,8 @@ func TestGetSubjectAccess(t *testing.T) {
 			clusterRoleBindings: clusterRoleBindings("test-user"),
 			roles:               roles("deployments", "list"),
 			roleBindings:        roleBindings(testRoleName, roleName, "test-user"),
-			expected: map[result.SubjectRef]sets.String{
-				{Name: "test-user", Kind: subjectKind}: sets.NewString("create"),
+			expected: map[result.SubjectRef]sets.Set[string]{
+				{Name: "test-user", Kind: subjectKind}: sets.New[string]("create"),
 			},
 		},
 		{
@@ -96,8 +96,8 @@ func TestGetSubjectAccess(t *testing.T) {
 			resource:     "deployments",
 			clusterRoles: clusterRoles("deployments", "create"),
 			roleBindings: roleBindings(testClusterRoleName, clusterRoleName, "test-user"),
-			expected: map[result.SubjectRef]sets.String{
-				{Name: "test-user", Kind: subjectKind}: sets.NewString("create"),
+			expected: map[result.SubjectRef]sets.Set[string]{
+				{Name: "test-user", Kind: subjectKind}: sets.New[string]("create"),
 			},
 		},
 		{
@@ -108,7 +108,7 @@ func TestGetSubjectAccess(t *testing.T) {
 			clusterRoleBindings: clusterRoleBindings("test-user"),
 			roles:               roles("configmaps", "list"),
 			roleBindings:        roleBindings(testRoleName, roleName, "test-user"),
-			expected:            map[result.SubjectRef]sets.String{},
+			expected:            map[result.SubjectRef]sets.Set[string]{},
 		},
 		{
 			name:                "VerbAll role binding",
@@ -118,8 +118,8 @@ func TestGetSubjectAccess(t *testing.T) {
 			clusterRoleBindings: clusterRoleBindings("test-user"),
 			roles:               roles("configmaps", v1.VerbAll),
 			roleBindings:        roleBindings(testRoleName, roleName, "test-user"),
-			expected: map[result.SubjectRef]sets.String{
-				{Name: "test-user", Kind: subjectKind}: sets.NewString(constants.ValidVerbs...),
+			expected: map[result.SubjectRef]sets.Set[string]{
+				{Name: "test-user", Kind: subjectKind}: sets.New[string](constants.ValidVerbs...),
 			},
 		},
 		{
@@ -128,8 +128,8 @@ func TestGetSubjectAccess(t *testing.T) {
 			resource:            "configmaps",
 			clusterRoles:        clusterRoles("configmaps", v1.VerbAll),
 			clusterRoleBindings: clusterRoleBindings("test-user"),
-			expected: map[result.SubjectRef]sets.String{
-				{Name: "test-user", Kind: subjectKind}: sets.NewString(constants.ValidVerbs...),
+			expected: map[result.SubjectRef]sets.Set[string]{
+				{Name: "test-user", Kind: subjectKind}: sets.New[string](constants.ValidVerbs...),
 			},
 		},
 	}
@@ -139,19 +139,19 @@ func TestGetSubjectAccess(t *testing.T) {
 			ctx := context.Background()
 
 			fakeRbacClient := &fake.FakeRbacV1{Fake: &k8stesting.Fake{}}
-			fakeRbacClient.Fake.AddReactor("list", "roles",
+			fakeRbacClient.AddReactor("list", "roles",
 				func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.RoleList{Items: test.roles}, nil
 				})
-			fakeRbacClient.Fake.AddReactor("list", "rolebindings",
+			fakeRbacClient.AddReactor("list", "rolebindings",
 				func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.RoleBindingList{Items: test.roleBindings}, nil
 				})
-			fakeRbacClient.Fake.AddReactor("list", "clusterroles",
+			fakeRbacClient.AddReactor("list", "clusterroles",
 				func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.ClusterRoleList{Items: test.clusterRoles}, nil
 				})
-			fakeRbacClient.Fake.AddReactor("list", "clusterrolebindings",
+			fakeRbacClient.AddReactor("list", "clusterrolebindings",
 				func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.ClusterRoleBindingList{Items: test.clusterRoleBindings}, nil
 				})
