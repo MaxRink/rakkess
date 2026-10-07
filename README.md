@@ -1,11 +1,15 @@
 # rakkess
-[![Build Status](https://travis-ci.com/corneliusweig/rakkess.svg?branch=master)](https://travis-ci.com/corneliusweig/rakkess)
+[![Build Status](https://github.com/corneliusweig/rakkess/actions/workflows/ci.yml/badge.svg)](https://github.com/corneliusweig/rakkess/actions/workflows/ci.yml)
 [![Code Coverage](https://codecov.io/gh/corneliusweig/rakkess/branch/master/graph/badge.svg)](https://codecov.io/gh/corneliusweig/rakkess)
 [![Go Report Card](https://goreportcard.com/badge/corneliusweig/rakkess)](https://goreportcard.com/report/corneliusweig/rakkess)
 [![LICENSE](https://img.shields.io/github/license/corneliusweig/rakkess.svg)](https://github.com/corneliusweig/rakkess/blob/master/LICENSE)
 [![Releases](https://img.shields.io/github/release-pre/corneliusweig/rakkess.svg)](https://github.com/corneliusweig/rakkess/releases)
 
 Review Access - kubectl plugin to show an access matrix for server resources
+
+Current Kubernetes client libraries no longer include the built-in GCP and
+Azure authentication providers. Configure kubectl with an exec credential
+plugin for those providers; OIDC authentication remains supported.
 
 ## Intro
 Have you ever wondered what access rights you have on a provided kubernetes cluster?
@@ -123,15 +127,21 @@ curl -LO https://github.com/corneliusweig/rakkess/releases/download/v0.5.0/rakke
 #### Build on host
 
 Requirements:
- - go 1.16 or newer
+ - go 1.26 or newer
  - GNU make
  - git
 
 Compiling:
 ```bash
-export PLATFORMS=$(go env GOOS)
-make all   # binaries will be placed in out/
+make all   # checks and a host binary (./rakkess)
+
+# Cross-compile the release artifacts for every supported platform.
+make deploy
 ```
+
+The Kind end-to-end suite requires Docker, `kubectl`, `kind`, and Helm. It
+creates and removes only the `rakkess-e2e-20260927` cluster. Run it with
+`make e2e`.
 
 #### Build in docker
 Requirements:
@@ -139,13 +149,12 @@ Requirements:
 
 Compiling:
 ```bash
-mkdir rakkess && chdir rakkess
-curl -Lo Dockerfile https://raw.githubusercontent.com/corneliusweig/rakkess/master/Dockerfile
+git clone https://github.com/corneliusweig/rakkess.git
+cd rakkess
 docker build . -t rakkess-builder
-docker run --rm -v $PWD:/go/bin/ --env PLATFORMS=$(go env GOOS) rakkess
-docker rmi rakkess-builder
+docker run --rm -v "$PWD/out:/go/bin" rakkess-builder
 ```
-Binaries will be placed in the current directory.
+Binaries will be placed in `out/`.
 
 ## Users
 
@@ -159,3 +168,58 @@ Binaries will be placed in the current directory.
 ---
 
 <a name="credit-kubectl-who-can">[1]</a>: This mode was inspired by [kubectl-who-can](https://github.com/aquasecurity/kubectl-who-can)
+
+## Auth-operator provenance
+
+Use `--auth-operator` with the access matrix or `--diff-with` to inspect related
+[auth-operator](https://github.com/telekom/auth-operator) configuration and observed
+RBAC alongside the effective permissions:
+
+```sh
+rakkess --namespace payments --sa payments:reader --auth-operator
+rakkess --namespace payments --as alice --as-group readers \
+  --diff-with as-group=writers --auth-operator
+```
+
+The table on stdout is always calculated using Kubernetes SelfSubjectAccessReviews.
+A single-line JSON object on stderr contains `authOperator.original` and, for comparisons,
+`authOperator.modified` (ordinary client warnings can also appear on stderr). Each report resolves the effective identity using a
+SelfSubjectReview and includes relevant BindDefinitions, RoleDefinitions, observed
+managed bindings, referenced roles and native ClusterRole aggregation inputs.
+Namespace selectors use OR between selectors and AND within each selector;
+explicit namespaces take precedence. Namespaced bindings do not imply cluster-wide
+access. Desired configuration may not yet be reconciled and never grants access by
+itself.
+
+Reports are advisory. `complete` describes successful reads and decoding of the
+supported resources, not a complete explanation of every Kubernetes authorizer.
+Missing permissions, incomplete discovery, invalid selectors or unmatched observed
+bindings produce `complete: false` with `errors`; unknown selector results are
+omitted. RestrictedBindDefinitions, RestrictedRoleDefinitions, RBACPolicy and
+external authorizers are not interpreted. Their effective access still appears in
+the native SSAR table. Collection uses the same credentials and impersonation as
+the matrix, so it cannot disclose metadata the queried identity cannot read.
+
+Authorization evaluation errors appear as `ERR`, including in comparisons. A
+resource or verb missing from either comparison inventory also appears as `ERR`;
+it is not treated as a denial. Repeated `--diff-with as-group=...` values replace
+the original group list and accumulate the new groups.
+
+## End-to-end tests
+
+`make e2e` creates and removes an isolated Kind cluster. It requires Docker, Kind,
+Helm, kubectl and jq, plus a clean auth-operator checkout at
+`233d42191da159cbe21bf340829ef3f4be9a3ec5` (`v0.5.0-rc.9`):
+
+```sh
+AUTH_OPERATOR_DIR=/path/to/auth-operator make e2e
+```
+
+The suite builds and runs the real operator, waits for generated roles and bindings,
+and checks effective namespace/cluster permissions, service account groups,
+permission gains/losses, selector OR/AND behavior, protected namespace exclusion,
+ClusterRole aggregation and incomplete provenance. It refuses to reuse an existing
+cluster. `KIND_CLUSTER` and `KIND_NODE_IMAGE` can select the task cluster name and
+node image. GitHub Actions runs this suite on Kubernetes 1.35 and 1.37, alongside
+native Linux, macOS and Windows Go 1.26/1.27 tests. HTTP regression tests exercise
+API errors, partial discovery, differing resource inventories and cancellation.

@@ -151,5 +151,5 @@ func getRbacClientImpl(o *options.RakkessOptions) (clientv1.RbacV1Interface, err
 		return nil, err
 	}
 
-	return clientv1.NewForConfigOrDie(restConfig), nil
+	return clientv1.NewForConfig(restConfig)
 }
