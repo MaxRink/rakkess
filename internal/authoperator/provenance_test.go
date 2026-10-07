@@ -36,6 +36,7 @@ func TestCollect(t *testing.T) {
 		{name: "observed role differs from desired", username: "alice", groups: []string{"developers"}, namespace: "payments", stale: true, origins: 3},
 		{name: "removed desired binding entry", username: "alice", groups: []string{"developers"}, namespace: "payments", removed: true, incomplete: true},
 		{name: "namespaced generated Role", username: "alice", groups: []string{"developers"}, namespace: "payments", localRole: true, origins: 2},
+		{name: "shared subjects do not cross attach", username: "alice", groups: []string{"developers"}, namespace: "payments", origins: 2},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			resources := provenanceResources()
@@ -58,6 +59,10 @@ func TestCollect(t *testing.T) {
 			}
 			if tt.removed {
 				resources["binddefinitions"] = `[]`
+			}
+			if tt.name == "shared subjects do not cross attach" {
+				resources["binddefinitions"] = `[{"metadata":{"name":"shared-bind"},"spec":{"targetName":"shared","subjects":[{"kind":"Group","name":"developers"}],"roleBindings":[{"namespace":"payments","roleRefs":["first"]},{"namespace":"payments","roleRefs":["second"]}]}}]`
+				resources["rolebindings"] = `[{"metadata":{"name":"first-binding","namespace":"payments","annotations":{"authorization.t-caas.telekom.com/source-kind":"BindDefinition","authorization.t-caas.telekom.com/source-name":"shared-bind"}},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"first"},"subjects":[{"kind":"Group","name":"developers"}]}]`
 			}
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -106,7 +111,7 @@ func TestCollect(t *testing.T) {
 							t.Error("unknown selector result became definite")
 						}
 					}
-					if !tt.incomplete {
+					if !tt.incomplete && tt.name != "shared subjects do not cross attach" {
 						if len(origin.Generated) == 0 {
 							t.Errorf("observed binding not linked: %#v", origin)
 						}
@@ -116,6 +121,11 @@ func TestCollect(t *testing.T) {
 							}
 						}
 					}
+				}
+			}
+			if tt.name == "shared subjects do not cross attach" {
+				if len(report.Origins) != 2 || len(report.Origins[0].Generated) != 1 || len(report.Origins[1].Generated) != 0 {
+					t.Errorf("shared subject attached incorrectly: %#v", report.Origins)
 				}
 			}
 			if tt.origins == 3 {
