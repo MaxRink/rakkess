@@ -192,7 +192,12 @@ func Collect(ctx context.Context, cfg *rest.Config, namespace string) Report {
 			origin := Origin{Kind: "BindDefinition", Name: def.Metadata.Name, TargetName: def.Spec.TargetName, BindingType: kind, Namespace: b.Namespace, Subjects: def.Spec.Subjects, RoleRefs: b.RoleRefs, ClusterRoleRefs: b.ClusterRoleRefs, NamespaceSelectors: b.NamespaceSelectors}
 			relevant := subjectMatches(def.Spec.Subjects, report.Username, report.Groups)
 			for _, obj := range objects {
-				if obj.Kind != kind || !ownedBy(obj, "BindDefinition", def.Metadata.Name) || (!bindingRefMatches(obj, b) && !subjectMatches(obj.Subjects, report.Username, report.Groups)) {
+				// A stale generated binding can retain the old role reference after the
+				// definition changes. Subject fallback preserves that evidence, but it
+				// is ambiguous when one definition has multiple bindings for the same
+				// subject. In that case require the role reference to identify the origin.
+				staleSingleBinding := len(bindings) == 1 && subjectMatches(obj.Subjects, report.Username, report.Groups)
+				if obj.Kind != kind || !ownedBy(obj, "BindDefinition", def.Metadata.Name) || (!bindingRefMatches(obj, b) && !staleSingleBinding) {
 					continue
 				}
 				if kind == roleBindingKind && namespace != "" && obj.Metadata.Namespace != namespace {
