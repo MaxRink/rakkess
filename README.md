@@ -139,9 +139,9 @@ make all   # checks and a host binary (./rakkess)
 make deploy
 ```
 
-The Kind end-to-end suite requires Docker, `kubectl`, `kind`, and Helm. It
-creates and removes only the `rakkess-e2e-20260927` cluster. Run it with
-`make e2e`.
+The Kind end-to-end suite requires Docker, `kubectl`, `kind`, and Helm.
+By default, it creates and removes the `rakkess-e2e` cluster; set
+`KIND_CLUSTER` to use another name. Run it with `make e2e`.
 
 #### Build in docker
 Requirements:
