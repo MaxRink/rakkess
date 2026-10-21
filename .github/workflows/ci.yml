@@ -39,7 +39,7 @@ jobs:
         make test
         make coverage
 
-    - uses: codecov/codecov-action@v2
+    - uses: codecov/codecov-action@v7
       name: Upload coverage to codecov.io
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
