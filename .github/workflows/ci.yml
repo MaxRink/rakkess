@@ -12,22 +12,30 @@ on:
 jobs:
 
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ['1.26.x', '1.27.x']
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
 
-    - name: Set up Go 1.16
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.16
-      id: go
+    - name: Check out code
+      uses: actions/checkout@v7
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: ${{ matrix.go }}
 
     - name: Verify go.mod is sane
-      run: go mod tidy && git diff --no-patch --exit-code
+      run: go mod tidy && git diff --exit-code -- go.mod go.sum
 
     - name: Run code lint
+      if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
       run: make lint
 
     - name: Install dependencies
@@ -38,9 +46,12 @@ jobs:
         set -euo pipefail
         make test
         make coverage
+        make race
+        make vet
 
-    - uses: codecov/codecov-action@v2
+    - uses: codecov/codecov-action@v7
       name: Upload coverage to codecov.io
+      if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./out/coverage.txt
@@ -48,17 +59,24 @@ jobs:
     - name: Verify build
       run: make dev
 
+    - name: Check Go vulnerabilities
+      if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
+      run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+    - name: Build Docker release packages
+      if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
+      run: docker build --tag rakkess:ci .
+
     - name: Make binaries
-      if: contains(github.ref, 'tags')
+      if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
       run: |
         set -euo pipefail
         sudo apt update
         sudo apt install -y upx
-        hack/install-gox.sh
         make deploy
 
     - name: Create release
-      if: contains(github.ref, 'tags')
+      if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -70,7 +88,7 @@ jobs:
         prerelease: false
 
     - name: Upload binaries to release
-      if: contains(github.ref, 'tags')
+      if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
       uses: svenstaro/upload-release-action@v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -81,7 +99,7 @@ jobs:
         file_glob: true
 
     - name: Update new version in krew-index
-      if: contains(github.ref, 'tags')
+      if: github.repository == 'corneliusweig/rakkess' && startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
       uses: rajatjindal/krew-release-bot@v0.0.39
       with:
         krew_template_file: hack/access-matrix.yaml

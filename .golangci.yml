@@ -1,0 +1,7 @@
+version: "2"
+linters:
+  exclusions:
+    rules:
+      # Literal fixture values keep table-driven behavior tests readable.
+      - path: _test\.go
+        linters: [goconst]

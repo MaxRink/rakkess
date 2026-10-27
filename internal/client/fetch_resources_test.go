@@ -17,24 +17,24 @@ limitations under the License.
 package client
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/corneliusweig/rakkess/internal/options"
-	openapi_v2 "github.com/googleapis/gnostic/openapiv2"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
-	restclient "k8s.io/client-go/rest"
 )
 
 type fakeCachedDiscoveryInterface struct {
+	discovery.DiscoveryInterface
 	invalidateCalls int
 	next            metav1.APIResourceList
 	err             error
 	fresh           bool
+	noResources     bool
 }
 
 var _ discovery.CachedDiscoveryInterface = &fakeCachedDiscoveryInterface{}
@@ -48,46 +48,18 @@ func (c *fakeCachedDiscoveryInterface) Invalidate() {
 	c.fresh = true
 }
 
-func (c *fakeCachedDiscoveryInterface) RESTClient() restclient.Interface {
-	panic("not implemented")
-}
-
-func (c *fakeCachedDiscoveryInterface) ServerGroups() (*metav1.APIGroupList, error) {
-	panic("not implemented")
-}
-
-func (c *fakeCachedDiscoveryInterface) ServerGroupsAndResources() ([]*metav1.APIGroup, []*metav1.APIResourceList, error) {
-	panic("not implemented")
-}
-
-func (c *fakeCachedDiscoveryInterface) ServerResourcesForGroupVersion(groupVersion string) (*metav1.APIResourceList, error) {
-	panic("not implemented")
-}
-
-func (c *fakeCachedDiscoveryInterface) ServerResources() ([]*metav1.APIResourceList, error) {
-	panic("not implemented")
-}
-
 func (c *fakeCachedDiscoveryInterface) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
-	if c.fresh {
+	if c.fresh && !c.noResources {
 		return []*metav1.APIResourceList{&c.next}, c.err
 	}
 	return nil, c.err
 }
 
 func (c *fakeCachedDiscoveryInterface) ServerPreferredNamespacedResources() ([]*metav1.APIResourceList, error) {
-	if c.fresh {
+	if c.fresh && !c.noResources {
 		return []*metav1.APIResourceList{&c.next}, c.err
 	}
 	return nil, c.err
-}
-
-func (c *fakeCachedDiscoveryInterface) ServerVersion() (*version.Info, error) {
-	panic("not implemented")
-}
-
-func (c *fakeCachedDiscoveryInterface) OpenAPISchema() (*openapi_v2.Document, error) {
-	panic("not implemented")
 }
 
 var (
@@ -119,7 +91,14 @@ func TestFetchAvailableGroupResources(t *testing.T) {
 		resources metav1.APIResourceList
 		err       error
 		expected  interface{}
+		malformed bool
 	}{
+		{
+			name:      "malformed group version",
+			malformed: true,
+			resources: metav1.APIResourceList{GroupVersion: "a/b/v1", APIResources: []metav1.APIResource{aFoo}},
+			expected:  []GroupResource(nil),
+		},
 		{
 			name:  "cluster resources",
 			verbs: []string{"list"},
@@ -192,6 +171,12 @@ func TestFetchAvailableGroupResources(t *testing.T) {
 			grs, err := FetchAvailableGroupResources(opts)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expected, grs)
+			if test.malformed {
+				assert.Error(t, opts.DiscoveryError)
+			} else {
+				assert.ErrorIs(t, opts.DiscoveryError, test.err)
+			}
+			assert.Equal(t, 1, fakeRbacClient.invalidateCalls)
 		})
 	}
 }
@@ -212,4 +197,21 @@ func TestGroupResource_fullName(t *testing.T) {
 		},
 	}
 	assert.Equal(t, "foo.v1", grGroup.fullName())
+}
+
+func TestFetchUnavailableResources(t *testing.T) {
+	cause := errors.New("discovery unavailable")
+	t.Cleanup(func() { getDiscoveryClient = getDiscoveryClientImpl })
+	for _, failClient := range []bool{true, false} {
+		getDiscoveryClient = func(*options.RakkessOptions) (discovery.CachedDiscoveryInterface, error) {
+			if failClient {
+				return nil, cause
+			}
+			return &fakeCachedDiscoveryInterface{noResources: true, err: cause}, nil
+		}
+		opts := options.NewRakkessOptions()
+		resources, err := FetchAvailableGroupResources(opts)
+		assert.Nil(t, resources)
+		assert.ErrorIs(t, err, cause)
+	}
 }

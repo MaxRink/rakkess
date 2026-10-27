@@ -24,6 +24,7 @@ import (
 
 	"github.com/corneliusweig/rakkess/internal/constants"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/client-go/discovery"
 	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/klog/v2"
@@ -31,18 +32,19 @@ import (
 
 // RakkessOptions holds all user configuration options.
 type RakkessOptions struct {
+	DiscoveryError   error
 	ConfigFlags      *genericclioptions.ConfigFlags
 	Verbs            []string
 	AsServiceAccount string
 	OutputFormat     string
-	Streams          *genericclioptions.IOStreams
+	Streams          *genericiooptions.IOStreams
 }
 
 // NewRakkessOptions creates RakkessOptions with defaults.
 func NewRakkessOptions() *RakkessOptions {
 	return &RakkessOptions{
 		ConfigFlags: genericclioptions.NewConfigFlags(false),
-		Streams: &genericclioptions.IOStreams{
+		Streams: &genericiooptions.IOStreams{
 			In:     os.Stdin,
 			Out:    os.Stdout,
 			ErrOut: os.Stderr,
@@ -52,7 +54,7 @@ func NewRakkessOptions() *RakkessOptions {
 
 // Sets up options with in-memory buffers as in- and output-streams
 func NewTestRakkessOptions() (*RakkessOptions, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer) {
-	iostreams, in, out, errout := genericclioptions.NewTestIOStreams()
+	iostreams, in, out, errout := genericiooptions.NewTestIOStreams()
 	klog.SetOutput(errout)
 	return &RakkessOptions{
 		ConfigFlags: genericclioptions.NewConfigFlags(true),
@@ -70,7 +72,10 @@ func (o *RakkessOptions) GetAuthClient() (v1.SelfSubjectAccessReviewInterface, e
 	restConfig.QPS = 500
 	restConfig.Burst = 1000
 
-	authClient := v1.NewForConfigOrDie(restConfig)
+	authClient, err := v1.NewForConfig(restConfig)
+	if err != nil {
+		return nil, err
+	}
 	return authClient.SelfSubjectAccessReviews(), nil
 }
 
@@ -91,12 +96,18 @@ func (o *RakkessOptions) ExpandServiceAccount() error {
 
 	impersonate := fmt.Sprintf("system:serviceaccount:%s", qualifiedServiceAccount)
 	klog.V(2).Infof("Impersonating as %s", impersonate)
-	o.ConfigFlags.Impersonate = &impersonate
+	if o.ConfigFlags.Impersonate == nil {
+		o.ConfigFlags.Impersonate = new(string)
+	}
+	*o.ConfigFlags.Impersonate = impersonate
 	return nil
 }
 
 func (o *RakkessOptions) namespacedServiceAccount() (string, error) {
-	if strings.Contains(o.AsServiceAccount, ":") {
+	if namespace, name, qualified := strings.Cut(o.AsServiceAccount, ":"); qualified {
+		if namespace == "" || name == "" || strings.Contains(name, ":") {
+			return "", fmt.Errorf("serviceAccount must be qualified '<namespace>:<sa-name>': %q", o.AsServiceAccount)
+		}
 		return o.AsServiceAccount, nil
 	}
 

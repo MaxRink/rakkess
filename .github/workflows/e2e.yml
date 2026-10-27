@@ -1,0 +1,38 @@
+name: rakkess Kind E2E
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  kind:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
+          - kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.1'
+      - uses: azure/setup-kubectl@v4
+      - uses: azure/setup-helm@v4
+      - name: Install kind
+        run: go install sigs.k8s.io/kind@v0.33.0
+      - uses: actions/checkout@v7
+        with:
+          repository: telekom/auth-operator
+          path: auth-operator
+          ref: 233d42191da159cbe21bf340829ef3f4be9a3ec5
+      - name: Run E2E
+        env:
+          KIND_NODE_IMAGE: ${{ matrix.node }}
+          AUTH_OPERATOR_DIR: ${{ github.workspace }}/auth-operator
+        run: make e2e

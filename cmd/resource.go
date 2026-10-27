@@ -17,7 +17,8 @@ limitations under the License.
 package cmd
 
 import (
-	"context"
+	"os/signal"
+	"syscall"
 
 	rakkess "github.com/corneliusweig/rakkess/internal"
 	"github.com/corneliusweig/rakkess/internal/constants"
@@ -68,8 +69,8 @@ var resourceCmd = &cobra.Command{
 	Long:    constants.HelpTextMapName(resourceLongHelp),
 	Example: constants.HelpTextMapName(resourceExamples),
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, cancel := context.WithCancel(context.Background())
-		catchCtrlC(cancel)
+		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGPIPE, syscall.SIGTERM)
+		defer stop()
 
 		resource := args[0]
 		var resourceName string

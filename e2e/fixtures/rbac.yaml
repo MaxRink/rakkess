@@ -1,0 +1,171 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rakkess-e2e
+  labels:
+    rakkess-e2e: "true"
+    t-caas.telekom.com/tenant: payments
+    t-caas.telekom.com/owner: tenant
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rakkess-e2e-open
+  labels:
+    rakkess-e2e: "true"
+    t-caas.telekom.com/tenant: analytics
+    t-caas.telekom.com/owner: tenant
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rakkess-e2e-protected
+  labels:
+    rakkess-e2e: "true"
+    t-caas.telekom.com/tenant: payments
+    t-caas.telekom.com/owner: tenant
+    t-caas.telekom.com/protected: "true"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reader
+  namespace: rakkess-e2e
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: writer
+  namespace: rakkess-e2e
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: operator-reader
+  namespace: rakkess-e2e
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: auth-provenance-reader
+rules:
+- apiGroups: ["authorization.t-caas.telekom.com"]
+  resources: ["roledefinitions", "binddefinitions"]
+  verbs: ["get", "list"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+- apiGroups: ["authentication.k8s.io"]
+  resources: ["selfsubjectreviews"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: auth-provenance-reader
+subjects:
+- kind: ServiceAccount
+  name: operator-reader
+  namespace: rakkess-e2e
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: auth-provenance-reader
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: namespaced-reader
+  namespace: rakkess-e2e
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: reader
+  namespace: rakkess-e2e
+subjects:
+- kind: ServiceAccount
+  name: reader
+  namespace: rakkess-e2e
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: namespaced-reader
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: group-reader
+  namespace: rakkess-e2e
+subjects:
+- kind: Group
+  name: rakkess-e2e-readers
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: namespaced-reader
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aggregate-reader
+  labels:
+    rakkess-e2e: aggregate
+    t-caas.telekom.com/rbac-fragment: "true"
+    t-caas.telekom.com/aggregate-scope: rakkess-e2e
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aggregate-parent
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rakkess-e2e: aggregate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: writer-aggregate
+subjects:
+- kind: ServiceAccount
+  name: writer
+  namespace: rakkess-e2e
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aggregate-parent
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rakkess-e2e-denied
+  labels:
+    rakkess-e2e: "true"
+    t-caas.telekom.com/tenant: payments
+    t-caas.telekom.com/owner: platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: native-sa-groups
+  namespace: rakkess-e2e-open
+subjects:
+- kind: Group
+  name: system:serviceaccounts:rakkess-e2e
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aggregate-parent
